@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G7 Creative | Rocket Fueled Filmmaking</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        g7Black: '#050505',
+                        g7Cream: '#f4f4f0',
+                        g7White: '#ffffff',
+                        g7Accent: '#c21500',
+                        g7DarkGray: '#111111'
+                    },
+                    fontFamily: {
+                        sans: ['Montserrat', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React, ReactDOM, Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- GSAP & Lenis -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; background-color: #050505; color: #f4f4f0; overflow-x: hidden; cursor: none; }
+        ::-webkit-scrollbar { display: none; }
+
+        .font-serif-italic { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 300; }
+        .text-outline { color: transparent; -webkit-text-stroke: 1px rgba(244, 244, 240, 0.15); transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+        .group:hover .text-outline { color: transparent; -webkit-text-stroke: 1px rgba(244, 244, 240, 0.5); }
+
+        /* Cinematic Grain */
+        .film-grain {
+            position: fixed; top: -150%; left: -50%; width: 300%; height: 300%;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png');
+            opacity: 0.03; pointer-events: none; z-index: 9999;
+            animation: grain 8s steps(10) infinite;
+        }
+        @keyframes grain {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-5%, -10%); }
+            20% { transform: translate(-15%, 5%); }
+            30% { transform: translate(7%, -25%); }
+            40% { transform: translate(-5%, 25%); }
+            50% { transform: translate(-15%, 10%); }
+            60% { transform: translate(15%, 0%); }
+            70% { transform: translate(0%, 15%); }
+            80% { transform: translate(3%, 35%); }
+            90% { transform: translate(-10%, 10%); }
+        }
+
+        /* Magnetic Cursor */
+        #custom-cursor {
+            position: fixed; top: 0; left: 0; width: 12px; height: 12px;
+            background-color: #f4f4f0; border-radius: 50%; pointer-events: none;
+            z-index: 10000; transform: translate(-50%, -50%); mix-blend-mode: difference;
+            transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1), height 0.3s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.3s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #custom-cursor.hovering { width: 90px; height: 90px; mix-blend-mode: normal; background-color: rgba(244, 244, 240, 0.1); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.3); }
+        #custom-cursor-text { opacity: 0; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 2px; transition: opacity 0.3s; }
+        #custom-cursor.hovering #custom-cursor-text { opacity: 1; }
+
+        .video-background { position: absolute; top: 50%; left: 50%; width: 100vw; height: 100vh; transform: translate(-50%, -50%); pointer-events: none; object-fit: cover; }
+        @media (min-aspect-ratio: 16/9) { .video-background { height: 56.25vw; } }
+        @media (max-aspect-ratio: 16/9) { .video-background { width: 177.78vh; } }
+
+        .loader-wrap { position: fixed; inset: 0; background: #050505; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+        /* Arsenal Sticky Line Reveal */
+        .service-row { border-top: 1px solid rgba(255,255,255,0.1); transition: background-color 0.4s ease; }
+        .service-row:hover { background-color: rgba(255,255,255,0.02); }
+    </style>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <div id="custom-cursor"><span id="custom-cursor-text">VIEW</span></div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useLayoutEffect, createContext, useContext } = React;
+        gsap.registerPlugin(ScrollTrigger);
+
+        const CursorContext = createContext();
+        const AudioContext = createContext();
+
+        const CursorProvider = ({ children }) => {
+            const [cursorState, setCursorState] = useState({ active: false, text: '' });
+
+            useEffect(() => {
+                const cursor = document.getElementById('custom-cursor');
+                const cursorText = document.getElementById('custom-cursor-text');
+                let mouseX = 0, mouseY = 0, cursorX = 0, cursorY = 0;
+
+                const onMouseMove = (e) => { mouseX = e.clientX; mouseY = e.clientY; };
+                window.addEventListener('mousemove', onMouseMove);
+
+                const render = () => {
+                    cursorX += (mouseX - cursorX) * 0.2;
+                    cursorY += (mouseY - cursorY) * 0.2;
+                    cursor.style.transform = `translate(${cursorX - (cursorState.active ? 45 : 6)}px, ${cursorY - (cursorState.active ? 45 : 6)}px)`;
+                    requestAnimationFrame(render);
+                };
+                requestAnimationFrame(render);
+
+                if (cursorState.active) {
+                    cursor.classList.add('hovering');
+                    cursorText.innerText = cursorState.text || 'VIEW';
+                } else {
+                    cursor.classList.remove('hovering');
+                }
+
+                return () => window.removeEventListener('mousemove', onMouseMove);
+            }, [cursorState]);
+
+            const setCursor = (active, text = '') => setCursorState({ active, text });
+
+            return <CursorContext.Provider value={{ setCursor }}>{children}</CursorContext.Provider>;
+        };
+
+        const useLenis = () => {
+            useEffect(() => {
+                if (typeof window.Lenis === 'undefined') return;
+                const lenis = new window.Lenis({ duration: 1.2, smooth: true });
+                lenis.on('scroll', ScrollTrigger.update);
+                gsap.ticker.add((time) => { lenis.raf(time * 1000); });
+                gsap.ticker.lagSmoothing(0);
+                return () => { lenis.destroy(); gsap.ticker.remove(lenis.raf); };
+            }, []);
+        };
+
+        const useScrollVelocitySkew = (ref) => {
+            useEffect(() => {
+                if (!ref.current) return;
+                let proxy = { skew: 0 },
+                    skewSetter = gsap.quickSetter(ref.current, "skewY", "deg"),
+                    clamp = gsap.utils.clamp(-15, 15);
+
+                ScrollTrigger.create({
+                    onUpdate: (self) => {
+                        let skew = clamp(self.getVelocity() / -150);
+                        if (Math.abs(skew) > Math.abs(proxy.skew)) {
+                            proxy.skew = skew;
+                            gsap.to(proxy, { skew: 0, duration: 0.8, ease: "power3", overwrite: true, onUpdate: () => skewSetter(proxy.skew) });
+                        }
+                    }
+                });
+            }, [ref]);
+        };
+
+        const splitTextToChars = (text) => {
+            return text.split(' ').map((word, i) => (
+                <span key={i} className="inline-block mr-[0.3em] overflow-hidden align-top pb-[0.1em]">
+                    {word.split('').map((char, j) => (
+                        <span key={j} className="split-char inline-block opacity-0">
+                            {char}
+                        </span>
+                    ))}
+                </span>
+            ));
+        };
+
+        const MagneticButton = ({ children, className, href, onMouseEnter, onMouseLeave }) => {
+            const buttonRef = useRef(null);
+
+            useEffect(() => {
+                const el = buttonRef.current;
+                if (!el) return;
+
+                const handleMouseMove = (e) => {
+                    const { clientX, clientY } = e;
+                    const { width, height, left, top } = el.getBoundingClientRect();
+                    const x = clientX - (left + width / 2);
+                    const y = clientY - (top + height / 2);
+                    gsap.to(el, { x: x * 0.4, y: y * 0.4, duration: 1, ease: "power3.out" });
+                };
+
+                const handleMouseLeave = () => {
+                    gsap.to(el, { x: 0, y: 0, duration: 1, ease: "elastic.out(1, 0.3)" });
+                };
+
+                el.addEventListener('mousemove', handleMouseMove);
+                el.addEventListener('mouseleave', handleMouseLeave);
+
+                return () => {
+                    el.removeEventListener('mousemove', handleMouseMove);
+                    el.removeEventListener('mouseleave', handleMouseLeave);
+                };
+            }, []);
+
+            return (
+                <div ref={buttonRef} className="inline-block relative z-20">
+                    <a href={href} className={className} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+                        {children}
+                    </a>
+                </div>
+            );
+        };
+
+        const Logo = ({ className }) => (
+            <img
+                src="https://res.cloudinary.com/dazhbium1/image/upload/q_auto/f_auto/v1778614112/G7_1_gqxc66.png"
+                alt="G7 Creative"
+                className={`${className} object-contain`}
+            />
+        );
+
+        const Loader = ({ onComplete }) => {
+            const loaderRef = useRef(null);
+            const logoRef = useRef(null);
+
+            useLayoutEffect(() => {
+                const tl = gsap.timeline({ onComplete });
+
+                tl.fromTo(logoRef.current,
+                    { opacity: 0, scale: 0.9, filter: 'blur(10px)' },
+                    { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: "power3.out" }
+                )
+                .to(logoRef.current, { scale: 1.05, opacity: 0, duration: 0.6, ease: "power2.inOut", delay: 0.6 })
+                .to(loaderRef.current, { yPercent: -100, duration: 1, ease: "expo.inOut" }, "-=0.2");
+            }, [onComplete]);
+
+            return (
+                <div ref={loaderRef} className="loader-wrap gap-4">
+                    <div ref={logoRef} className="text-g7Cream">
+                        <Logo className="w-48 md:w-64" />
+                    </div>
+                    <div className="w-48 h-[2px] bg-white/10 rounded-full overflow-hidden mt-8">
+                        <div className="w-full h-full bg-g7Cream origin-left animate-[loading_2s_ease-in-out_forwards]"></div>
+                    </div>
+                    <style>{`@keyframes loading { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }`}</style>
+                </div>
+            );
+        };
+
+        const Navbar = () => {
+            const { audioOn, setAudioOn } = useContext(AudioContext);
+            const { setCursor } = useContext(CursorContext);
+
+            return (
+                <nav className="absolute top-0 left-0 w-full z-50 flex justify-between items-center px-6 md:px-12 py-8 pointer-events-none">
+                    <div
+                        className="pointer-events-auto text-g7Cream"
+                        onMouseEnter={() => setCursor(true, 'HOME')}
+                        onMouseLeave={() => setCursor(false)}
+                    >
+                        <a href="/">
+                            <Logo className="w-24 md:w-32 cursor-pointer" />
+                        </a>
+                    </div>
+                    <div
+                        className="text-[10px] md:text-xs tracking-[0.2em] font-bold cursor-pointer uppercase flex items-center gap-3 text-g7Cream pointer-events-auto"
+                        onClick={() => setAudioOn(!audioOn)}
+                        onMouseEnter={() => setCursor(true, 'TOGGLE')}
+                        onMouseLeave={() => setCursor(false)}
+                    >
+                        <span>Sound: {audioOn ? 'ON' : 'OFF'}</span>
+                        <div className="flex gap-1 h-3 items-end">
+                            <div className={`w-[2px] bg-g7Cream transition-all duration-300 ${audioOn ? 'h-full animate-pulse' : 'h-1'}`}></div>
+                            <div className={`w-[2px] bg-g7Cream transition-all duration-300 delay-75 ${audioOn ? 'h-2/3 animate-pulse' : 'h-1'}`}></div>
+                            <div className={`w-[2px] bg-g7Cream transition-all duration-300 delay-150 ${audioOn ? 'h-4/5 animate-pulse' : 'h-1'}`}></div>
+                        </div>
+                    </div>
+                </nav>
+            );
+        };
+
+        const Hero = () => {
+            const heroRef = useRef(null);
+            const textRef = useRef(null);
+            const videoWrapperRef = useRef(null);
+            const iframeRef = useRef(null);
+            const { audioOn, setAudioOn } = useContext(AudioContext);
+            const { setCursor } = useContext(CursorContext);
+
+            useLayoutEffect(() => {
+                let ctx = gsap.context(() => {
+                    gsap.to(videoWrapperRef.current, {
+                        yPercent: 20,
+                        scale: 1.05,
+                        ease: "none",
+                        scrollTrigger: { trigger: heroRef.current, start: "top top", end: "bottom top", scrub: true }
+                    });
+                    gsap.to(textRef.current, {
+                        yPercent: 50,
+                        opacity: 0,
+                        ease: "none",
+                        scrollTrigger: { trigger: heroRef.current, start: "top top", end: "center top", scrub: true }
+                    });
+                });
+                return () => ctx.revert();
+            }, []);
+
+            useEffect(() => {
+                if (iframeRef.current && iframeRef.current.contentWindow) {
+                    iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                        event: 'command',
+                        func: audioOn ? 'unMute' : 'mute',
+                        args: []
+                    }), '*');
+                }
+            }, [audioOn]);
+
+            return (
+                <section ref={heroRef} className="relative h-screen w-full overflow-hidden bg-g7Black flex items-center justify-center">
+                    <div ref={videoWrapperRef} className="absolute inset-0 w-full h-full scale-[1.02] origin-center">
+                        <iframe
+                            ref={iframeRef}
+                            className="video-background opacity-60 pointer-events-none"
+                            src="https://www.youtube.com/embed/ZDjMujnlCNM?autoplay=1&mute=1&loop=1&playlist=ZDjMujnlCNM&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
+                            frameBorder="0"
+                            allow="autoplay; fullscreen"
+                        ></iframe>
+                        <div
+                            className="absolute inset-0 bg-gradient-to-t from-g7Black via-transparent to-g7Black/40 z-10 cursor-pointer"
+                            onClick={() => {
+                                const newAudioState = !audioOn;
+                                setAudioOn(newAudioState);
+                                setCursor(true, newAudioState ? 'MUTE' : 'SOUND');
+                            }}
+                            onMouseEnter={() => setCursor(true, audioOn ? 'MUTE' : 'SOUND')}
+                            onMouseLeave={() => setCursor(false)}
+                        ></div>
+                    </div>
+
+                    <div ref={textRef} className="relative z-20 text-center px-4 w-full flex flex-col items-center pointer-events-none mt-20">
+                        <h1 className="text-[12vw] sm:text-[10vw] md:text-[8vw] font-black leading-[0.85] tracking-tighter uppercase text-g7Cream drop-shadow-2xl">
+                            Rocket Fueled <br/>
+                            <span className="font-serif-italic normal-case tracking-normal text-g7Cream">Filmmaking</span>
+                        </h1>
+                    </div>
+                </section>
+            );
+        };
+
+        const Manifesto = () => {
+            const sectionRef = useRef(null);
+            const textRef = useRef(null);
+            const { setCursor } = useContext(CursorContext);
+            useScrollVelocitySkew(sectionRef);
+
+            useLayoutEffect(() => {
+                const chars = textRef.current.querySelectorAll('.split-char');
+                gsap.fromTo(chars,
+                    { yPercent: 120, rotationZ: 5, opacity: 0 },
+                    {
+                        yPercent: 0, rotationZ: 0, opacity: 1, stagger: 0.05, ease: "power2.out",
+                        scrollTrigger: {
+                            trigger: sectionRef.current,
+                            start: "top 85%",
+                            end: "center 40%",
+                            scrub: 1
+                        }
+                    }
+                );
+            }, []);
+
+            const text = "At G7 CREATIVE, video production and professional photography are not just about making content... it's about Rocket Fueled Creativity that turns heads and produces results.";
+
+            return (
+                <section ref={sectionRef} className="py-24 md:py-48 px-6 md:px-12 bg-g7Black relative z-10 velocity-skew-container border-b border-white/5">
+                    <div className="max-w-6xl mx-auto">
+                        <h2 className="text-[10px] md:text-xs tracking-[0.3em] text-g7Cream/50 mb-8 md:mb-12 uppercase block">Our Manifesto</h2>
+                        <div ref={textRef} className="text-2xl min-[400px]:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.4] md:leading-[1.2] tracking-tight uppercase break-words">
+                            {splitTextToChars(text)}
+                        </div>
+                        <div className="mt-16 md:mt-24">
+                            <MagneticButton
+                                href="/contact.html"
+                                className="px-8 py-4 border border-white/20 text-g7Cream text-xs md:text-sm tracking-[0.2em] uppercase font-bold rounded-full hover:bg-white hover:text-g7Black transition-all duration-300 inline-block"
+                                onMouseEnter={() => setCursor(true, 'START')}
+                                onMouseLeave={() => setCursor(false)}
+                            >
+                                Book an Experience
+                            </MagneticButton>
+                        </div>
+                    </div>
+                </section>
+            );
+        };
+
+        // --- OPTIMIZED PORTFOLIO SECTION ---
+        // Using high-res thumbnails with a Ken Burns effect instead of 4 simultaneous iframes.
+        // This eliminates the lag completely while looking deeply cinematic.
+        const CinematicShowcase = () => {
+            const { setCursor } = useContext(CursorContext);
+            const [hoveredIndex, setHoveredIndex] = useState(0);
+            const sectionRef = useRef(null);
+
+            const projects = [
+                { title: "MILLION DOLLAR MASTERMIND", client: "MDM 2023", role: "Cinematic Promo", videoId: "wES8bsnsLpQ" },
+                { title: "LOGAN PAUL x COMMODITIES", client: "Commodities", role: "Commercial", videoId: "ZDjMujnlCNM" },
+                { title: "DEION SANDERS REACTION", client: "Ryan Stewman", role: "Viral Video", videoId: "_AigiEcgmDA" },
+                { title: "PHONESITES SAAS", client: "Phonesites", role: "Promo Campaign", videoId: "KMe435GXqSo" }
+            ];
+
+            return (
+                <section ref={sectionRef} className="relative min-h-screen w-full bg-g7Black py-32 flex items-center overflow-hidden">
+                    {/* High-Performance Image Backgrounds (No Lag) */}
+                    <div className="absolute inset-0 w-full h-full pointer-events-none">
+                        {projects.map((proj, idx) => (
+                            <div
+                                key={idx}
+                                className={`absolute inset-0 w-full h-full transition-all duration-1000 ease-in-out ${hoveredIndex === idx ? 'opacity-40 scale-105' : 'opacity-0 scale-100'}`}
+                            >
+                                <img
+                                    className="w-full h-full object-cover transform-gpu"
+                                    src={`https://img.youtube.com/vi/${proj.videoId}/maxresdefault.jpg`}
+                                    alt={proj.title}
+                                />
+                            </div>
+                        ))}
+                        <div className="absolute inset-0 bg-gradient-to-r from-g7Black via-g7Black/80 to-transparent"></div>
+                    </div>
+
+                    <div className="relative z-20 w-full max-w-7xl mx-auto px-6 md:px-12">
+                        <h2 className="text-xs tracking-[0.4em] font-bold uppercase text-g7Cream/50 mb-16">Selected Archives</h2>
+                        <div className="flex flex-col">
+                            {projects.map((proj, idx) => (
+                                <a
+                                    key={idx}
+                                    href="/work.html"
+                                    className="group flex flex-col md:flex-row md:items-center justify-between py-8 md:py-12 border-b border-white/10 cursor-none transition-colors duration-500 hover:bg-white/[0.02] px-4 -mx-4 rounded-xl"
+                                    onMouseEnter={() => {
+                                        setHoveredIndex(idx);
+                                        setCursor(true, 'WATCH');
+                                    }}
+                                    onMouseLeave={() => setCursor(false)}
+                                >
+                                    <h3 className={`text-4xl sm:text-5xl md:text-7xl font-black uppercase tracking-tighter transition-all duration-500 origin-left ${hoveredIndex === idx ? 'text-g7Cream scale-105 md:translate-x-4' : 'text-outline'}`}>
+                                        {proj.title}
+                                    </h3>
+                                    <div className={`flex flex-col text-left md:text-right mt-4 md:mt-0 transition-all duration-500 ${hoveredIndex === idx ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}>
+                                        <span className="font-serif-italic text-xl md:text-2xl text-g7Cream">{proj.client}</span>
+                                        <span className="text-xs tracking-widest uppercase text-g7Cream/50 font-bold mt-1">{proj.role}</span>
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            );
+        };
+
+        // --- REDESIGNED CAPABILITIES SECTION ---
+        // A high-end split-screen interactive accordion. As users hover, the media crossfades.
+        // Provides a striking, tactile experience and shifts to a light theme for premium pacing.
+        const Expertise = () => {
+            const { setCursor } = useContext(CursorContext);
+            const [activeIndex, setActiveIndex] = useState(0);
+
+            const services = [
+                { id: "01", title: "Commercials", desc: "High-end advertisements engineered for YouTube, Facebook, and TV Networks. We bring cinematic fidelity to your brand's narrative.", img: "https://img.youtube.com/vi/ZDjMujnlCNM/maxresdefault.jpg" },
+                { id: "02", title: "Social Content", desc: "Short-form, engaging content designed specifically for modern algorithms. We grow your audience so you can focus on the business.", img: "https://img.youtube.com/vi/_AigiEcgmDA/maxresdefault.jpg" },
+                { id: "03", title: "Event Recaps", desc: "Immortalize your masterminds, professional summits, or private events. We capture the energy and format it for global sharing.", img: "https://img.youtube.com/vi/wES8bsnsLpQ/maxresdefault.jpg" },
+                { id: "04", title: "Brand Promos", desc: "From brand documentaries to elite promos, we bring your vision to life utilizing industry-standard color science and masterful post-production.", img: "https://img.youtube.com/vi/KMe435GXqSo/maxresdefault.jpg" },
+                { id: "05", title: "Pro Photography", desc: "High-end photography for brands, events, and portraiture. We capture stunning stills that elevate your visual identity and tell your story in a single frame.", img: "https://res.cloudinary.com/dazhbium1/image/upload/q_auto/f_auto/v1778614110/307629693_793297641722731_8067313833270329370_n_cpwav1.jpg" }
+            ];
+
+            return (
+                <section className="py-32 px-6 md:px-12 bg-g7Cream text-g7Black relative z-10">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-8">
+                            <div>
+                                <h2 className="text-xs tracking-[0.4em] font-bold uppercase text-g7Black/50 mb-4">Core Capabilities</h2>
+                                <h3 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.9]">Our Expertise</h3>
+                            </div>
+                            <MagneticButton
+                                href="/contact.html"
+                                className="px-8 py-4 bg-g7Black text-g7Cream text-xs tracking-[0.2em] uppercase font-bold rounded-full hover:bg-g7Accent transition-all duration-300 inline-block shrink-0"
+                                onMouseEnter={() => setCursor(true, 'INQUIRE')}
+                                onMouseLeave={() => setCursor(false)}
+                            >
+                                Request Services
+                            </MagneticButton>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row gap-12 lg:gap-24 items-center">
+                            {/* Left: Sticky Image/Video container */}
+                            <div className="w-full md:w-1/2 h-[50vh] md:h-[70vh] rounded-2xl overflow-hidden relative shadow-2xl">
+                                {services.map((srv, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`absolute inset-0 w-full h-full transition-all duration-1000 ease-[cubic-bezier(0.25,1,0.5,1)] ${activeIndex === idx ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-110 z-0'}`}
+                                    >
+                                        <div className="absolute inset-0 bg-black/20 z-10 pointer-events-none"></div>
+                                        <img
+                                            src={srv.img}
+                                            className="w-full h-full object-cover transform-gpu"
+                                            alt={srv.title}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Right: Interactive List */}
+                            <div className="w-full md:w-1/2 flex flex-col justify-center">
+                                {services.map((srv, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="border-b border-black/10 py-8 cursor-pointer group"
+                                        onMouseEnter={() => {
+                                            setActiveIndex(idx);
+                                            setCursor(true, 'VIEW');
+                                        }}
+                                        onMouseLeave={() => setCursor(false)}
+                                    >
+                                        <div className="flex items-center gap-6 md:gap-8">
+                                            <span className={`text-sm font-bold tracking-widest transition-colors duration-500 ${activeIndex === idx ? 'text-g7Accent' : 'text-g7Black/30 group-hover:text-g7Black/60'}`}>{srv.id}</span>
+                                            <h4 className={`text-4xl md:text-5xl font-black uppercase tracking-tighter transition-all duration-500 origin-left ${activeIndex === idx ? 'text-g7Black scale-105 translate-x-2' : 'text-g7Black/30 group-hover:text-g7Black/60'}`}>
+                                                {srv.title}
+                                            </h4>
+                                        </div>
+                                        {/* CSS Grid Animated Accordion */}
+                                        <div
+                                            className={`grid transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] ${activeIndex === idx ? 'grid-rows-[1fr] opacity-100 mt-6' : 'grid-rows-[0fr] opacity-0 mt-0'}`}
+                                        >
+                                            <div className="overflow-hidden">
+                                                <p className="text-base md:text-lg text-g7Black/70 leading-relaxed font-light ml-14 md:ml-16 max-w-md pb-4">
+                                                    {srv.desc}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            );
+        };
+
+        const Testimonials = () => {
+            const sectionRef = useRef(null);
+            const { setCursor } = useContext(CursorContext);
+
+            const reviews = [
+                { name: "Collin & Mollie", stars: 5, quote: "Our wedding video was excellent! Hector was very attentive and captured every little thing about our day perfectly. If you're looking for a videographer Hector is great to work with!" },
+                { name: "Kade & Mercedes", stars: 5, quote: "10/10 experience. Hector took our engagement photos and they came out amazing! His attention to detail and making sure we had everything we wanted is something you don't see very often. He went above and beyond for us and we would 100% recommend working with him if you have the opportunity." }
+            ];
+
+            useLayoutEffect(() => {
+                let ctx = gsap.context(() => {
+                    gsap.from(".review-card", {
+                        y: 50,
+                        opacity: 0,
+                        stagger: 0.2,
+                        duration: 1,
+                        ease: "power3.out",
+                        scrollTrigger: { trigger: sectionRef.current, start: "top 75%" }
+                    });
+                }, sectionRef);
+                return () => ctx.revert();
+            }, []);
+
+            return (
+                <section ref={sectionRef} className="py-32 px-6 md:px-12 bg-g7DarkGray relative z-10 border-t border-white/5">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="mb-16 md:mb-24 text-center">
+                            <h2 className="text-xs tracking-[0.4em] font-bold uppercase text-g7Cream/50 mb-4">Don't Take Our Word For It...</h2>
+                            <h3 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-g7Cream">What Our Clients Are Saying</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-16">
+                            {reviews.map((review, idx) => (
+                                <div key={idx} className="review-card flex flex-col bg-g7Black p-10 md:p-14 rounded-[2rem] border border-white/5 hover:border-white/10 transition-colors duration-500 cursor-none" onMouseEnter={() => setCursor(true, 'CLIENT')} onMouseLeave={() => setCursor(false)}>
+                                    <div className="flex gap-1 mb-8">
+                                        {[...Array(review.stars)].map((_, i) => (
+                                            <svg key={i} className="w-5 h-5 text-g7Accent" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                            </svg>
+                                        ))}
+                                    </div>
+                                    <p className="text-xl md:text-2xl font-serif-italic text-g7Cream/90 leading-relaxed mb-10 flex-grow">"{review.quote}"</p>
+                                    <div className="border-t border-white/10 pt-6">
+                                        <h4 className="text-xl font-black uppercase tracking-widest text-g7Cream">{review.name}</h4>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            );
+        };
+
+        const TheDirector = () => {
+            const sectionRef = useRef(null);
+            const img1Ref = useRef(null);
+            const img2Ref = useRef(null);
+
+            useLayoutEffect(() => {
+                let ctx = gsap.context(() => {
+                    gsap.fromTo(img1Ref.current,
+                        { yPercent: -10, scale: 1.05 },
+                        { yPercent: 10, scale: 1, ease: "none", scrollTrigger: { trigger: sectionRef.current, start: "top bottom", end: "bottom top", scrub: true }}
+                    );
+                    gsap.fromTo(img2Ref.current,
+                        { yPercent: 20 },
+                        { yPercent: -20, ease: "none", scrollTrigger: { trigger: sectionRef.current, start: "top bottom", end: "bottom top", scrub: true }}
+                    );
+                }, sectionRef);
+                return () => ctx.revert();
+            }, []);
+
+            return (
+                <section ref={sectionRef} className="py-32 md:py-48 bg-g7Black relative z-10 overflow-hidden border-t border-white/5">
+                    <div className="max-w-7xl mx-auto px-6 md:px-12 flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
+                        <div className="w-full lg:w-1/2 relative h-[60vh] md:h-[80vh]">
+                            <div className="absolute top-0 right-0 md:right-10 w-4/5 h-[70%] overflow-hidden rounded-2xl shadow-2xl z-10">
+                                <img
+                                    ref={img1Ref}
+                                    src="https://res.cloudinary.com/dazhbium1/image/upload/q_auto/f_auto/v1778614110/_HRV3060_websize_rk9561.jpg"
+                                    alt="Hector Gonzalez directing"
+                                    className="absolute inset-0 w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-1000"
+                                />
+                            </div>
+                            <div ref={img2Ref} className="absolute bottom-0 left-0 md:left-4 w-2/3 h-[55%] md:h-[65%] overflow-hidden rounded-2xl shadow-2xl z-20 border-[8px] border-g7Black">
+                                <img
+                                    src="https://res.cloudinary.com/dazhbium1/image/upload/q_auto/f_auto/v1778614111/Oprion_1_hs4tdc.png"
+                                    alt="Hector Gonzalez Headshot"
+                                    className="absolute inset-0 w-full h-full object-cover object-top grayscale hover:grayscale-0 transition-all duration-1000"
+                                />
+                            </div>
+                        </div>
+                        <div className="w-full lg:w-1/2 flex flex-col justify-center">
+                            <h2 className="text-xs tracking-[0.4em] font-bold uppercase text-g7Cream/50 mb-6">The Director</h2>
+                            <h3 className="text-5xl md:text-7xl font-serif-italic mb-8 text-g7Cream">Hector Gonzalez</h3>
+                            <p className="text-lg md:text-xl text-g7Cream/80 leading-relaxed mb-6 font-light">
+                                Founder & CEO of G7 Creative. With over 7 years in the commercial film and photography industry, Hector has directed, filmed, photographed, and edited projects for titans like <strong className="font-bold text-g7White">Logan Paul, Alex Rodriguez, and Ryan Stewman</strong>.
+                            </p>
+                            <p className="text-base text-g7Cream/50 leading-relaxed mb-10">
+                                Graduating Cum Laude from Grand Canyon University with a bachelors in digital film, Hector combines academic precision with raw, street-level creativity to produce content that simply cannot be ignored.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8">
+                                <div>
+                                    <span className="block text-4xl md:text-5xl font-black mb-2 text-g7White">500k+</span>
+                                    <span className="text-xs tracking-widest uppercase text-g7Cream/50">Viral Views</span>
+                                </div>
+                                <div>
+                                    <span className="block text-4xl md:text-5xl font-black mb-2 text-g7White">15+</span>
+                                    <span className="text-xs tracking-widest uppercase text-g7Cream/50">Celeb Clients</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            );
+        };
+
+        const FooterCTA = () => {
+            const { setCursor } = useContext(CursorContext);
+
+            return (
+                <footer className="w-full bg-g7Cream text-g7Black relative z-10 pt-32 pb-12 px-6 md:px-12 rounded-t-[40px] md:rounded-t-[80px] mt-[-40px]">
+                    <div className="max-w-7xl mx-auto flex flex-col items-center justify-center text-center">
+                        <p className="text-sm md:text-base tracking-[0.4em] font-bold uppercase mb-8 text-g7Black/50">Your Legacy Awaits</p>
+
+                        <a
+                            href="/contact.html"
+                            className="text-[12vw] sm:text-[10vw] md:text-[8vw] font-black uppercase leading-[0.85] tracking-tighter block hover:text-g7Accent transition-colors duration-500 cursor-none"
+                            onMouseEnter={() => setCursor(true, 'START')}
+                            onMouseLeave={() => setCursor(false)}
+                        >
+                            LET'S <span className="font-serif-italic normal-case block md:inline md:ml-4">Talk.</span>
+                        </a>
+
+                        <div className="w-full flex flex-col md:flex-row justify-between items-center mt-32 pt-8 border-t border-black/10 text-xs font-bold tracking-[0.2em] uppercase gap-6">
+                            <div className="flex items-center gap-4">
+                                <Logo className="w-20" />
+                                <span className="text-g7Black/40">© 2026</span>
+                            </div>
+                            <div className="flex gap-8">
+                                <a href="https://www.instagram.com/hecto_gonzo/" target="_blank" rel="noopener noreferrer" className="hover:text-g7Accent transition-colors">Instagram</a>
+                                <a href="https://www.linkedin.com/in/hectorgonzalezproductions/" target="_blank" rel="noopener noreferrer" className="hover:text-g7Accent transition-colors">LinkedIn</a>
+                                <a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer" className="hover:text-g7Accent transition-colors">YouTube</a>
+                                <a href="/privacy.html" className="hover:text-g7Accent transition-colors">Privacy Policy</a>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+            );
+        };
+
+        const App = () => {
+            const [loading, setLoading] = useState(true);
+            const [audioOn, setAudioOn] = useState(false);
+            useLenis();
+
+            return (
+                <CursorProvider>
+                    <AudioContext.Provider value={{ audioOn, setAudioOn }}>
+                        {loading && <Loader onComplete={() => setLoading(false)} />}
+                        <div className="bg-g7Black relative selection:bg-g7White selection:text-g7Black" style={{ opacity: loading ? 0 : 1, transition: 'opacity 0.8s ease-out' }}>
+                            <Navbar />
+                            <Hero />
+                            <Manifesto />
+                            <CinematicShowcase />
+                            <Expertise />
+                            <Testimonials />
+                            <TheDirector />
+                            <FooterCTA />
+                        </div>
+                    </AudioContext.Provider>
+                </CursorProvider>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
