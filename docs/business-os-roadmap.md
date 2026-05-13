@@ -4,9 +4,9 @@ This website should grow into a full operating system for the videography busine
 
 ## Phase 1: Premium public website
 
-- Replace the old one-page site with internal pages.
+- Replace the old one-page site with a React public site and clean internal routes.
 - Remove old Phonesites links.
-- Add portfolio, services, process, portal preview, contact, and privacy pages.
+- Add portfolio, services, process, portal preview, contact, and privacy routes.
 - Deploy on Cloudflare Pages from GitHub.
 
 ## Phase 2: Lead intake CRM
