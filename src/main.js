@@ -28,7 +28,7 @@ const nav = [
   ["Services", "/services"],
   ["Process", "/process"],
   ["Portal", "/portal"],
-  ["Start a Project", "/contact", "nav-cta"]
+  ["Start", "/contact", "nav-cta"]
 ];
 
 function thumb(id) {
@@ -131,7 +131,7 @@ function Loader() {
   );
 }
 
-function Header({ route }) {
+function Header({ route, audioOn, setAudioOn }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -148,10 +148,7 @@ function Header({ route }) {
   }, [open]);
 
   return h("header", { className: cx("site-header", (scrolled || route !== "/") && "solid") },
-    h(Link, { href: "/", className: "brand", label: "G7 Creative home" }, h(Logo, null)),
-    h("button", { className: "menu-toggle", type: "button", "aria-label": "Toggle menu", onClick: () => setOpen(!open) },
-      h("span"), h("span"), h("span")
-    ),
+    h(Link, { href: "/", className: "brand", label: "G7 Creative home", "data-cursor": "HOME" }, h(Logo, null)),
     h("nav", { className: cx("site-nav", open && "open") },
       nav.map(([name, href, extra]) => h(Link, {
         key: href,
@@ -159,37 +156,74 @@ function Header({ route }) {
         className: cx(extra, route === href && "active"),
         children: name
       }))
+    ),
+    h("div", { className: "header-right" },
+      h("button", {
+        className: "sound-toggle",
+        type: "button",
+        "aria-label": audioOn ? "Mute showreel" : "Turn showreel sound on",
+        "data-cursor": "TOGGLE",
+        onClick: () => setAudioOn(!audioOn)
+      },
+        h("span", null, `Sound: ${audioOn ? "ON" : "OFF"}`),
+        h("i", { className: cx(audioOn && "live") }),
+        h("i", { className: cx(audioOn && "live") }),
+        h("i", { className: cx(audioOn && "live") })
+      ),
+      h("button", { className: "menu-toggle", type: "button", "aria-label": "Toggle menu", onClick: () => setOpen(!open) },
+        h("span"), h("span"), h("span")
+      )
     )
   );
 }
 
-function Hero() {
+function Hero({ audioOn, setAudioOn }) {
+  const iframeRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!iframeRef.current || !iframeRef.current.contentWindow) return;
+    iframeRef.current.contentWindow.postMessage(JSON.stringify({
+      event: "command",
+      func: audioOn ? "unMute" : "mute",
+      args: []
+    }), "*");
+  }, [audioOn]);
+
   return h("section", { className: "hero" },
     h("div", { className: "hero-media" },
       h("iframe", {
+        ref: iframeRef,
         title: "G7 Creative reel",
-        src: "https://www.youtube.com/embed/ZDjMujnlCNM?autoplay=1&mute=1&loop=1&playlist=ZDjMujnlCNM&controls=0&modestbranding=1&rel=0&playsinline=1",
+        src: "https://www.youtube.com/embed/ZDjMujnlCNM?autoplay=1&mute=1&loop=1&playlist=ZDjMujnlCNM&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1",
         allow: "autoplay; fullscreen"
       })
     ),
-    h("div", { className: "hero-scrim" }),
+    h("button", {
+      className: "hero-scrim",
+      type: "button",
+      "aria-label": audioOn ? "Mute showreel" : "Turn showreel sound on",
+      "data-cursor": audioOn ? "MUTE" : "SOUND",
+      onClick: () => setAudioOn(!audioOn)
+    }),
     h("div", { className: "hero-content" },
-      h("p", { className: "eyebrow" }, "Video-first production studio"),
-      h("h1", null, "Rocket Fueled", h("em", null, "Filmmaking")),
-      h("p", { className: "hero-copy" }, "Cinematic video, sharp photography, and a client experience built to feel effortless from first inquiry to final delivery."),
-      h("div", { className: "hero-actions" },
-        h(Link, { href: "/contact", className: "button primary", children: "Plan My Shoot" }),
-        h(Link, { href: "/work", className: "button secondary", children: "View Work" })
-      )
+      h("h1", null, "Rocket Fueled", h("em", null, "Filmmaking"))
     ),
-    h("div", { className: "hero-tags" }, ["Commercials", "Events", "Social Content", "Photography"].map((tag) => h("span", { key: tag }, tag)))
+    h("div", { className: "hero-footer" },
+      h("span", null, "Commercial film"),
+      h("span", null, "Event recaps"),
+      h("span", null, "Social content"),
+      h("span", null, "Photography")
+    )
   );
 }
 
 function Manifesto() {
   return h("section", { className: "section manifesto" },
-    h("p", { className: "eyebrow" }, "Our Manifesto"),
-    h("p", { className: "manifesto-text" }, "Video production and photography are not just about making content. They are about ", h("em", null, "rocket fueled creativity"), " that turns heads and produces results.")
+    h("div", { className: "manifesto-kicker" },
+      h("p", { className: "eyebrow" }, "Our Manifesto"),
+      h(Link, { href: "/contact", className: "button secondary", children: "Book an Experience" })
+    ),
+    h("p", { className: "manifesto-text" }, "At G7 Creative, video production and professional photography are not just about making content. It's about ", h("em", null, "rocket fueled creativity"), " that turns heads and produces results.")
   );
 }
 
@@ -215,13 +249,95 @@ function ProjectRows({ compact = false }) {
   );
 }
 
-function ServicesRail() {
-  return h("div", { className: "service-rail" },
+function Showcase({ page = false }) {
+  const [active, setActive] = useState(0);
+  return h("section", { className: cx("showcase", page && "showcase-page") },
+    h("div", { className: "showcase-bg" },
+      projects.map((project, index) => h("img", {
+        key: project.slug,
+        className: cx(index === active && "active"),
+        src: thumb(project.videoId),
+        alt: ""
+      }))
+    ),
+    h("div", { className: "showcase-inner" },
+      h(SectionHead, {
+        eyebrow: "Selected archives",
+        title: page ? "Motion with proof behind it." : "Selected Archives",
+        copy: page ? "Campaigns, event films, social assets, and promos built to carry a brand past the shoot day." : null,
+        action: h(Link, { href: page ? "/contact" : "/work", className: "button secondary", children: page ? "Plan something like this" : "Explore the archive" })
+      }),
+      h("div", { className: "archive-list" },
+        projects.map((project, index) => h(Link, {
+          key: project.slug,
+          href: page ? `/contact?project=${project.slug}` : "/work",
+          className: cx("archive-row", index === active && "active"),
+          "data-cursor": "WATCH",
+          onMouseEnter: () => setActive(index),
+          onFocus: () => setActive(index)
+        },
+          h("h3", null, project.title),
+          h("div", { className: "archive-meta" },
+            h("span", null, project.client),
+            h("span", null, project.role)
+          )
+        ))
+      )
+    )
+  );
+}
+
+function ServicesRail({ elevated = false }) {
+  return h("div", { className: cx("service-rail", elevated && "elevated") },
     services.map((service) => h("div", { key: service.id, className: "service-item" },
       h("span", null, service.id),
       h("strong", null, service.title),
       h("p", null, service.desc)
     ))
+  );
+}
+
+function Expertise() {
+  const [active, setActive] = useState(0);
+  const service = services[active];
+
+  return h("section", { className: "expertise" },
+    h("div", { className: "expertise-inner" },
+      h("div", { className: "expertise-head" },
+        h("div", null,
+          h("p", { className: "eyebrow" }, "Core Capabilities"),
+          h("h2", null, "Our Expertise")
+        ),
+        h(Link, { href: "/services", className: "button dark", children: "Request Services" })
+      ),
+      h("div", { className: "expertise-grid" },
+        h("div", { className: "expertise-media" },
+          services.map((item, index) => h("img", {
+            key: item.id,
+            className: cx(index === active && "active"),
+            src: item.image,
+            alt: item.title
+          })),
+          h("div", { className: "media-caption" },
+            h("span", null, service.id),
+            h("strong", null, service.title)
+          )
+        ),
+        h("div", { className: "expertise-list" },
+          services.map((item, index) => h("button", {
+            key: item.id,
+            className: cx("expertise-row", index === active && "active"),
+            type: "button",
+            onMouseEnter: () => setActive(index),
+            onFocus: () => setActive(index)
+          },
+            h("span", null, item.id),
+            h("strong", null, item.title),
+            h("p", null, item.desc)
+          ))
+        )
+      )
+    )
   );
 }
 
@@ -256,18 +372,12 @@ function Footer() {
   );
 }
 
-function Home() {
+function Home({ audioOn, setAudioOn }) {
   return h(React.Fragment, null,
-    h(Hero),
+    h(Hero, { audioOn, setAudioOn }),
     h(Manifesto),
-    h("section", { className: "section" },
-      h(SectionHead, { eyebrow: "Selected work", title: "Proof with motion.", action: h(Link, { href: "/work", className: "button secondary", children: "Explore the archive" }) }),
-      h(ProjectRows, { compact: true })
-    ),
-    h("section", { className: "light" }, h("div", { className: "light-inner" },
-      h(SectionHead, { eyebrow: "Core capabilities", title: "Video leads. Photo supports. Strategy ties it together." }),
-      h(ServicesRail)
-    )),
+    h(Showcase),
+    h(Expertise),
     h(DirectorSection),
     h(TestimonialSection),
     h(FinalCTA)
@@ -280,7 +390,7 @@ function TestimonialSection() {
     ["Kade and Mercedes", "10/10 experience. His attention to detail and making sure we had everything we wanted is something you do not see very often."]
   ];
   return h("section", { className: "section" },
-    h(SectionHead, { eyebrow: "Client words", title: "People remember how the day felt." }),
+    h(SectionHead, { eyebrow: "Don't take our word for it", title: "What clients are saying." }),
     h("div", { className: "card-grid" }, reviews.map(([name, quote]) => h("article", { className: "card", key: name }, h("p", null, quote), h("h3", null, name))))
   );
 }
@@ -298,7 +408,8 @@ function PageHero({ eyebrow, title, copy, image }) {
 function Work() {
   return h(React.Fragment, null,
     h(PageHero, { eyebrow: "Selected archive", title: "Work that sells the room, the story, and the result.", copy: "A cinematic archive built around outcomes, not just pretty frames.", image: thumb("ZDjMujnlCNM") }),
-    h("section", { className: "section project-list" },
+    h(Showcase, { page: true }),
+    h("section", { className: "section project-list case-stack" },
       projects.map((project) => h("article", { className: "case-study", id: project.slug, key: project.slug },
         h("div", { className: "video-frame" }, h("iframe", { title: project.title, src: `https://www.youtube.com/embed/${project.videoId}?rel=0&modestbranding=1`, allowFullScreen: true })),
         h("div", null, h("p", { className: "eyebrow" }, project.role), h("h2", null, project.title), h("p", null, project.outcome), h(Link, { href: "/contact", className: "button secondary", children: "Plan something like this" }))
@@ -316,8 +427,8 @@ function Services() {
   ];
   return h(React.Fragment, null,
     h(PageHero, { eyebrow: "Capabilities", title: "Production systems that scale from one shoot to a full content engine.", copy: "Video remains the center. Photography, cutdowns, process, and delivery support the full client journey.", image: thumb("wES8bsnsLpQ") }),
-    h("section", { className: "light" }, h("div", { className: "light-inner" }, h(ServicesRail))),
-    h("section", { className: "section" }, h(SectionHead, { eyebrow: "Ways to work", title: "Simple starting points." }), h("div", { className: "card-grid" }, packages.map(([title, copy]) => h("article", { className: "card", key: title }, h("p", { className: "eyebrow" }, "Package"), h("h3", null, title), h("p", null, copy), h(Link, { href: "/contact", className: "button secondary", children: "Start here" }))))),
+    h(Expertise),
+    h("section", { className: "section" }, h(SectionHead, { eyebrow: "Ways to work", title: "Simple starting points." }), h("div", { className: "card-grid premium-grid" }, packages.map(([title, copy]) => h("article", { className: "card package-card", key: title }, h("p", { className: "eyebrow" }, "Package"), h("h3", null, title), h("p", null, copy), h(Link, { href: "/contact", className: "button secondary", children: "Start here" }))))),
     h(FinalCTA)
   );
 }
@@ -429,6 +540,7 @@ function privacyCopy(title) {
 
 function App() {
   const [route, setRoute] = useState(pathNow());
+  const [audioOn, setAudioOn] = useState(false);
   useEffect(() => {
     const onRoute = () => setRoute(pathNow());
     window.addEventListener("popstate", onRoute);
@@ -453,8 +565,8 @@ function App() {
     h("div", { className: "film-grain" }),
     h(Cursor),
     h(Loader),
-    h(Header, { route }),
-    h("main", null, h(Page)),
+    h(Header, { route, audioOn, setAudioOn }),
+    h("main", null, h(Page, { audioOn, setAudioOn })),
     h(Footer)
   );
 }
